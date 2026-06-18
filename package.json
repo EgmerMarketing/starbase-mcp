@@ -1,0 +1,55 @@
+{
+  "name": "@egmer/starbase-mcp",
+  "version": "2.0.0",
+  "description": "MCP server for the Starbase OS CRM. Manage contacts, tags, forms, and analytics from Claude.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "starbase-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "login": "node dist/index.js login",
+    "doctor": "node dist/index.js doctor",
+    "dev": "tsc && node dist/index.js",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EgmerMarketing/starbase-mcp.git"
+  },
+  "keywords": [
+    "mcp",
+    "starbase",
+    "starbaseos",
+    "crm",
+    "marketing",
+    "supabase",
+    "model-context-protocol",
+    "claude"
+  ],
+  "author": "Egmer Marketing LLC",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
