@@ -2,16 +2,9 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import readline from "readline";
 import { z } from "zod";
-import {
-  DEFAULT_SUPABASE_ANON_KEY,
-  DEFAULT_SUPABASE_URL,
-  CONFIG_FILE,
-  extractRefreshToken,
-  resolveConfig,
-  saveConfigFile,
-} from "./config.js";
+import { resolveConfig } from "./config.js";
+import { runLogin } from "./login.js";
 import { StarbaseClient } from "./starbase-client.js";
 import { TokenManager } from "./token-manager.js";
 
@@ -20,55 +13,6 @@ const VERSION = "2.0.0";
 // ============================================================
 // CLI: login / doctor / serve
 // ============================================================
-
-async function prompt(question: string): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-  return new Promise((resolve) => rl.question(question, (a) => { rl.close(); resolve(a); }));
-}
-
-/** One-time interactive setup that validates and saves a refresh token. */
-async function runLogin(argToken?: string): Promise<void> {
-  process.stderr.write(
-    `\nStarbase MCP setup (v${VERSION})\n` +
-      `--------------------------------\n` +
-      `Paste your Starbase token. To get it:\n` +
-      `  1. Sign in at https://starbaseos.com\n` +
-      `  2. Open DevTools (Cmd+Opt+I) > Application > Local Storage > starbaseos.com\n` +
-      `  3. Copy the value of the key starting with "sb-" and ending in "-auth-token"\n` +
-      `     (you can paste the whole value; we'll extract what we need)\n\n`
-  );
-
-  const raw = argToken ?? (await prompt("Paste token here: "));
-  let refreshToken: string;
-  try {
-    refreshToken = extractRefreshToken(raw);
-  } catch (e) {
-    process.stderr.write(`\n✗ ${(e as Error).message}\n`);
-    process.exit(1);
-  }
-
-  process.stderr.write("\nVerifying with Starbase...\n");
-  const tokens = new TokenManager({
-    supabaseUrl: process.env.STARBASE_SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL,
-    anonKey: process.env.STARBASE_SUPABASE_ANON_KEY?.trim() || DEFAULT_SUPABASE_ANON_KEY,
-    refreshToken,
-  });
-
-  try {
-    const { userId, email } = await tokens.ensureSession();
-    saveConfigFile({ refreshToken });
-    process.stderr.write(
-      `\n✓ Signed in${email ? ` as ${email}` : ""} (user ${userId}).\n` +
-        `  Saved to ${CONFIG_FILE}\n\n` +
-        `Add this to your Claude MCP config:\n\n` +
-        `  {\n    "mcpServers": {\n      "starbase": {\n        "command": "npx",\n        "args": ["-y", "github:EgmerMarketing/starbase-mcp"]\n      }\n    }\n  }\n\n` +
-        `Then restart Claude. You're done.\n\n`
-    );
-  } catch (e) {
-    process.stderr.write(`\n✗ ${(e as Error).message}\n`);
-    process.exit(1);
-  }
-}
 
 /** Diagnose the current configuration without starting the server. */
 async function runDoctor(): Promise<void> {
@@ -267,7 +211,7 @@ async function main() {
   switch (cmd) {
     case "login":
     case "setup":
-      await runLogin(process.argv[3]);
+      await runLogin(process.argv.slice(3));
       break;
     case "doctor":
       await runDoctor();

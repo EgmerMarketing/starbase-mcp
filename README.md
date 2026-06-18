@@ -1,87 +1,36 @@
 # Starbase MCP
 
-Connect your [Starbase OS](https://starbaseos.com) CRM to Claude. Once installed,
-you can ask Claude to look up contacts, tag leads, read your forms, check
-analytics, and more — straight from your own Starbase account.
+Connect your [Starbase OS](https://starbaseos.com) CRM to Claude. Once connected,
+you can ask Claude to look up contacts, tag leads, and read your forms, straight
+from your own Starbase account.
 
 Works in **Claude Desktop**, **Claude Code**, and any other MCP client.
 
 ---
 
-## Quick start (2 minutes)
+## Quick start
 
-### 1. Get your Starbase token
-
-1. Sign in at **[starbaseos.com](https://starbaseos.com)**.
-2. Open your browser DevTools (`Cmd+Opt+I` on Mac, `F12` on Windows).
-3. Go to **Application** ▸ **Local Storage** ▸ `https://starbaseos.com`.
-4. Find the key that **starts with `sb-`** and **ends with `-auth-token`**.
-5. Copy its **entire value** (you can paste the whole thing — the setup grabs
-   what it needs).
-
-### 2. Save it
-
-Run this once in your terminal:
+Run this in your terminal:
 
 ```bash
-npx github:EgmerMarketing/starbase-mcp login
+npx -y github:EgmerMarketing/starbase-mcp login
 ```
 
-Paste your token when prompted. You should see:
+It asks for your **Starbase email**, emails you a **6-digit code**, and you type
+the code back. No password, no developer tools, no copy/pasting tokens.
 
-```
-✓ Signed in as you@email.com (user xxxx). Saved to ~/.starbase-mcp/config.json
-```
+If you use **Claude Desktop**, that's it: setup connects itself automatically.
+Just **fully quit and reopen Claude Desktop** (not only close the window), and
+try asking: *"List my Starbase contacts."*
 
-That's it — the server refreshes your session automatically from now on. You
-should never have to paste a token again.
-
-### 3. Add it to Claude
-
-**Claude Desktop** — edit your config file:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "starbase": {
-      "command": "npx",
-      "args": ["-y", "github:EgmerMarketing/starbase-mcp"]
-    }
-  }
-}
-```
-
-**Claude Code** — one command:
+If you use **Claude Code**, run one more command:
 
 ```bash
 claude mcp add starbase -- npx -y github:EgmerMarketing/starbase-mcp
 ```
 
-Restart Claude and you're done. Try asking: *"List my Starbase contacts."*
-
----
-
-## Don't want to save a config file?
-
-Skip `login` and pass the token inline instead. Put the **whole `sb-…-auth-token`
-value** as `STARBASE_REFRESH_TOKEN`:
-
-```json
-{
-  "mcpServers": {
-    "starbase": {
-      "command": "npx",
-      "args": ["-y", "github:EgmerMarketing/starbase-mcp"],
-      "env": {
-        "STARBASE_REFRESH_TOKEN": "paste-your-token-value-here"
-      }
-    }
-  }
-}
-```
+That's the whole setup. Your session refreshes itself from then on, so you should
+never have to sign in again.
 
 ---
 
@@ -93,8 +42,8 @@ value** as `STARBASE_REFRESH_TOKEN`:
 | Tags | `list_tags`, `create_tag`, `delete_tag`, `get_contact_tags`, `add_tag_to_contact`, `remove_tag_from_contact` |
 | Forms | `list_forms`, `get_form` |
 
-All tools are prefixed `starbase_` and operate **only on your own account** —
-the server scopes every request to your user id and Starbase's row-level security
+All tools are prefixed `starbase_` and operate **only on your own account**. The
+server scopes every request to your user id and Starbase's row-level security
 enforces it server-side.
 
 ---
@@ -107,22 +56,32 @@ Check your setup any time:
 npx github:EgmerMarketing/starbase-mcp doctor
 ```
 
-- **"No Starbase refresh token found"** — run `npx github:EgmerMarketing/starbase-mcp login`.
-- **"Your refresh token is invalid or expired"** — your Starbase session was
-  signed out everywhere. Grab a fresh token (step 1) and run `login` again.
-- Tokens and session state live in `~/.starbase-mcp/` (created with `600`
-  permissions). Delete that folder to fully reset.
+- **No code in your inbox?** Check spam. Codes expire quickly, so request a fresh
+  one if a few minutes have passed.
+- **"No Starbase refresh token found"** — run the `login` command above.
+- **Need to reset?** Credentials live in `~/.starbase-mcp/` (created with `600`
+  permissions). Delete that folder and run `login` again.
+
+### Advanced: sign in with a token instead of a code
+
+If you'd rather not use the email code, you can paste a session token:
+
+```bash
+npx -y github:EgmerMarketing/starbase-mcp login --token "<your sb-...-auth-token value>"
+```
+
+Get the value from your browser at starbaseos.com under DevTools ▸ Application ▸
+Local Storage ▸ the key ending in `-auth-token`. You can paste the whole value.
 
 ---
 
-## How auth works
+## How it works
 
-Starbase signs in with Google OAuth, so there's no API key to copy. Instead this
-server uses your **refresh token** — the same long-lived credential your browser
-uses to stay signed in. It exchanges that for a short-lived access token before
-each request and rotates it automatically, persisting the rotated token to
-`~/.starbase-mcp/session.json`. Your user id is read from the token itself, so
-the server is fully multi-user: every person uses their own token and sees only
-their own data.
+Starbase signs in with Google, so there's no API key to copy. The `login` command
+uses Starbase's email one-time-code to create a **dedicated session for this MCP
+server**, separate from your browser. It then exchanges that for short-lived
+access tokens automatically and rotates them in the background, persisting state
+to `~/.starbase-mcp/`. Your user id is read from the token itself, so every person
+who installs this uses their own login and sees only their own data.
 
 Built by [Egmer Marketing](https://egmermarketing.com). MIT licensed.
