@@ -34,8 +34,10 @@ function out(s: string): void {
   process.stderr.write(s);
 }
 
-/** Ask Starbase to email a 6-digit login code to this address. */
-async function requestCode(email: string): Promise<void> {
+type Session = { refreshToken: string; userId?: string; email?: string };
+
+/** Ask Starbase to email a sign-in link (and/or code) to this address. */
+async function requestLoginEmail(email: string): Promise<void> {
   const { supabaseUrl, anonKey } = authConfig();
   const res = await fetch(`${supabaseUrl}/auth/v1/otp`, {
     method: "POST",
@@ -43,29 +45,66 @@ async function requestCode(email: string): Promise<void> {
     // create_user:false => never create a new account from a typo; only existing Starbase users.
     body: JSON.stringify({ email, create_user: false }),
   });
+  if (res.status === 429) {
+    throw new Error(
+      "Starbase is rate-limiting login emails right now (their email is in test mode, only a few " +
+        "per hour). Wait a few minutes and try again, or sign in with a token: `login --token`."
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Could not send a login code (HTTP ${res.status}). ${body}`);
+    throw new Error(`Could not send a login email (HTTP ${res.status}). ${body}`);
   }
 }
 
-/** Exchange the emailed code for a session and return the refresh token. */
-async function verifyCode(
-  email: string,
-  code: string
-): Promise<{ refreshToken: string; userId?: string; email?: string }> {
+function sessionFromParams(params: URLSearchParams): Session | null {
+  const refreshToken = params.get("refresh_token");
+  if (!refreshToken) return null;
+  return { refreshToken };
+}
+
+/**
+ * Complete sign-in from whatever the user pastes out of the email:
+ *   - a full magic-link URL (we replay it and read the session from the redirect)
+ *   - a numeric code, if Starbase's template ever sends one
+ */
+async function completeFromInput(email: string, input: string): Promise<Session> {
+  const value = input.trim();
   const { supabaseUrl, anonKey } = authConfig();
-  const res = await fetch(`${supabaseUrl}/auth/v1/verify`, {
-    method: "POST",
-    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "email", email, token: code.replace(/\s+/g, "") }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data?.refresh_token) {
-    const msg = data?.msg || data?.error_description || data?.error || `HTTP ${res.status}`;
-    throw new Error(`That code didn't work (${msg}). Codes expire quickly; request a fresh one.`);
+
+  // Magic link: replay it server-side; the session rides in the redirect fragment.
+  if (/^https?:\/\//i.test(value)) {
+    const res = await fetch(value, { method: "GET", redirect: "manual", headers: { apikey: anonKey } });
+    const loc = res.headers.get("location") || "";
+    const frag = loc.includes("#") ? loc.split("#")[1] : loc.split("?")[1] || "";
+    const params = new URLSearchParams(frag);
+    if (params.get("error") || params.get("error_code")) {
+      throw new Error(
+        `That link didn't work (${params.get("error_description") || params.get("error_code")}). ` +
+          "Magic links are single-use and expire fast, so request a fresh email."
+      );
+    }
+    const session = sessionFromParams(params);
+    if (!session) throw new Error("Couldn't read a session from that link. Paste the full sign-in link from the email.");
+    return session;
   }
-  return { refreshToken: data.refresh_token, userId: data.user?.id, email: data.user?.email };
+
+  // Numeric code fallback.
+  if (/^\d{4,8}$/.test(value)) {
+    const res = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+      method: "POST",
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "email", email, token: value }),
+    });
+    const data = await res.json().catch(() => ({} as any));
+    if (!res.ok || !data?.refresh_token) {
+      const msg = data?.msg || data?.error_description || data?.error || `HTTP ${res.status}`;
+      throw new Error(`That code didn't work (${msg}). Codes expire quickly; request a fresh one.`);
+    }
+    return { refreshToken: data.refresh_token, userId: data.user?.id, email: data.user?.email };
+  }
+
+  throw new Error("Paste the sign-in link from the email (it starts with https://).");
 }
 
 /** Path to the Claude Desktop config for this OS, or null if unknown. */
@@ -138,7 +177,7 @@ export async function runLogin(args: string[]): Promise<void> {
   out(
     `\nConnect your Starbase account\n` +
       `-----------------------------\n` +
-      `We'll email you a 6-digit code to sign in. No password needed.\n\n`
+      `We'll email you a sign-in link. No password needed.\n\n`
   );
 
   const email = (await ask("Your Starbase email: ")).toLowerCase();
@@ -148,17 +187,20 @@ export async function runLogin(args: string[]): Promise<void> {
   }
 
   try {
-    await requestCode(email);
+    await requestLoginEmail(email);
   } catch (e) {
     out(`\n✗ ${(e as Error).message}\n`);
     process.exit(1);
   }
-  out(`\nWe just emailed a 6-digit code to ${email}. (Check spam if you don't see it.)\n`);
+  out(
+    `\nWe emailed a sign-in link to ${email}. (Check spam if you don't see it.)\n` +
+      `Open the email, copy the "Sign in" link, and paste it below.\n\n`
+  );
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const code = await ask("Enter the 6-digit code: ");
+    const pasted = await ask("Paste the sign-in link: ");
     try {
-      const session = await verifyCode(email, code);
+      const session = await completeFromInput(email, pasted);
       await persistAndWire(session.refreshToken, session.userId, session.email || email);
       return;
     } catch (e) {
