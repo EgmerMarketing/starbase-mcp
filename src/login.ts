@@ -174,6 +174,19 @@ export async function runLogin(args: string[]): Promise<void> {
     return;
   }
 
+  // Complete directly from a sign-in link you already have, no new email needed.
+  const linkFlagIdx = args.indexOf("--link");
+  if (linkFlagIdx !== -1) {
+    try {
+      const session = await completeFromInput("", args[linkFlagIdx + 1] || "");
+      await persistAndWire(session.refreshToken, session.userId, session.email);
+    } catch (e) {
+      out(`\n✗ ${(e as Error).message}\n`);
+      process.exit(1);
+    }
+    return;
+  }
+
   out(
     `\nConnect your Starbase account\n` +
       `-----------------------------\n` +
@@ -186,16 +199,27 @@ export async function runLogin(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  let emailSent = true;
   try {
     await requestLoginEmail(email);
   } catch (e) {
-    out(`\n✗ ${(e as Error).message}\n`);
-    process.exit(1);
+    // Email throttled or failed: don't give up. The user may already have a
+    // recent sign-in link they can paste.
+    emailSent = false;
+    out(`\n! ${(e as Error).message}\n`);
   }
-  out(
-    `\nWe emailed a sign-in link to ${email}. (Check spam if you don't see it.)\n` +
-      `Open the email, copy the "Sign in" link, and paste it below.\n\n`
-  );
+
+  if (emailSent) {
+    out(
+      `\nWe emailed a sign-in link to ${email}. (Check spam if you don't see it.)\n` +
+        `Open the email, copy the "Sign in" link, and paste it below.\n\n`
+    );
+  } else {
+    out(
+      `\nIf you already have a recent Starbase sign-in email, open it, copy the\n` +
+        `"Sign in" link, and paste it below. Otherwise press Ctrl+C and try later.\n\n`
+    );
+  }
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     const pasted = await ask("Paste the sign-in link: ");
