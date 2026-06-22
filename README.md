@@ -16,6 +16,10 @@ Run this in your terminal:
 npx -y github:EgmerMarketing/starbase-mcp login
 ```
 
+> **On Windows, use Command Prompt, not PowerShell.** Press Start, type `cmd`,
+> open **Command Prompt**, and paste the command there. (PowerShell blocks `npx`
+> by default with a "scripts are disabled" error.)
+
 Then:
 
 1. Type your **Starbase email** and press Enter. We email you a sign-in link.
@@ -74,6 +78,9 @@ npx github:EgmerMarketing/starbase-mcp doctor
   method below.
 - **"That link didn't work"?** Sign-in links are single-use and expire quickly.
   Run `login` again to get a fresh one, and paste it soon after it arrives.
+- **Windows: "running scripts is disabled on this system"?** That's PowerShell
+  blocking `npx`. Use **Command Prompt** instead (Start ▸ type `cmd`), or in
+  PowerShell run `npx.cmd -y github:EgmerMarketing/starbase-mcp login`.
 - **"No Starbase refresh token found"** — run the `login` command above.
 - **Need to reset?** Credentials live in `~/.starbase-mcp/` (created with `600`
   permissions). Delete that folder and run `login` again.

@@ -13,6 +13,17 @@ import { TokenManager } from "./token-manager.js";
 
 const GITHUB_SPEC = "github:EgmerMarketing/starbase-mcp";
 
+/**
+ * The MCP server launch entry for a Claude config. On Windows, `npx` is a
+ * PowerShell script that the default Execution Policy blocks, so Claude Desktop
+ * can't run `command: "npx"` directly. Wrapping it in `cmd /c` sidesteps that.
+ */
+function serverEntry(): { command: string; args: string[] } {
+  return process.platform === "win32"
+    ? { command: "cmd", args: ["/c", "npx", "-y", GITHUB_SPEC] }
+    : { command: "npx", args: ["-y", GITHUB_SPEC] };
+}
+
 function authConfig() {
   return {
     supabaseUrl: process.env.STARBASE_SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL,
@@ -141,7 +152,7 @@ function writeClaudeDesktopConfig(): boolean {
   }
 
   config.mcpServers = config.mcpServers || {};
-  config.mcpServers.starbase = { command: "npx", args: ["-y", GITHUB_SPEC] };
+  config.mcpServers.starbase = serverEntry();
   fs.writeFileSync(cfgPath, JSON.stringify(config, null, 2));
   return true;
 }
@@ -154,11 +165,12 @@ async function persistAndWire(refreshToken: string, userId?: string, email?: str
   if (writeClaudeDesktopConfig()) {
     out(`✓ Added "starbase" to Claude Desktop. Fully restart Claude Desktop (quit and reopen) to finish.\n\n`);
   } else {
+    const entry = JSON.stringify({ mcpServers: { starbase: serverEntry() } });
     out(
       `\nTo connect it, run this one command if you use Claude Code:\n` +
         `  claude mcp add starbase -- npx -y ${GITHUB_SPEC}\n\n` +
         `Or add this to your Claude Desktop config and restart:\n` +
-        `  { "mcpServers": { "starbase": { "command": "npx", "args": ["-y", "${GITHUB_SPEC}"] } } }\n\n`
+        `  ${entry}\n\n`
     );
   }
 }
